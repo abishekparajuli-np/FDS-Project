@@ -1,5 +1,5 @@
 from flask import jsonify, Blueprint, request
-from crossreferenceengine import CrossReferenceEngiene, TrustedSource, WEIGHTS
+from crossreferenceengine import CrossReferenceEngine, TRUSTED_SOURCES, WEIGHTS
 
 api = Blueprint('api',__name__,url_prefix='/api')
 
@@ -44,7 +44,7 @@ def analyze():
         content= content[:10000]
 
     try:
-        result=CrossReferenceEngiene.analyze(title, content)  
+        result=CrossReferenceEngine.analyze(title, content)  
         return jsonify(result)
     except Exception as e:
         return jsonify({
@@ -62,7 +62,7 @@ def get_sources():
             'credibility':info["credibility"],
             'bias':info["bias"],
             'tier':info["tier"]
-        } for domain , info in sorted(TrustedSource.items(), key=lambda x : (-x[1]["credibility"], x[1]["name"]))
+        } for domain , info in sorted(TRUSTED_SOURCES.items(), key=lambda x : (-x[1]["credibility"], x[1]["name"]))
     ]
 
     return jsonify({
