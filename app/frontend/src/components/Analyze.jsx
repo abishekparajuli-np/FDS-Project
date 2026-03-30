@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import api from '../api/api';
+import analyzerBg from '../assets/analyzer-bg.jpg';
 
 function Analyze({ onAnalysisComplete }) {
   const [title, setTitle] = useState('');
@@ -12,7 +13,7 @@ function Analyze({ onAnalysisComplete }) {
     setError(null);
 
     if (!title.trim() && !content.trim()) {
-      setError('Please provide at least a title or content to analyze.');
+      setError('Please provide a title or article content to analyze.');
       return;
     }
 
@@ -34,93 +35,79 @@ function Analyze({ onAnalysisComplete }) {
   };
 
   return (
-    <div className="max-w-3xl mx-auto px-8">
-      {/* Header */}
-      <div className="text-center mb-8">
-        <h1 className="text-3xl font-bold text-white mb-2">🔍 Content Analysis</h1>
-        <p className="text-gray-400">Enter the title and/or content of the article you want to fact-check.</p>
-      </div>
+    <section
+      className="section"
+      data-aos="fade-up"
+      style={{
+        backgroundImage: `linear-gradient(rgba(13,13,26,0.85), rgba(13,13,26,0.92)), url(${analyzerBg})`,
+        backgroundSize: 'cover',
+        backgroundPosition: 'center',
+        backgroundAttachment: 'fixed',
+      }}
+    >
+      <div className="section-inner max-w-[920px]">
+        <h1 className="section-title">Analyze a News Article</h1>
+        <div className="orange-underline" />
+        <p className="section-subtitle mb-10">
+          Submit article content to verify claims against trusted sources and receive an instant verdict.
+        </p>
 
-      {/* Form */}
-      <form onSubmit={handleSubmit} className="bg-slate-900/80 p-8 rounded-xl border border-rose-500/20">
-        {/* Title Input */}
-        <div className="mb-6">
-          <label htmlFor="title" className="block text-white font-medium mb-2">
-            Article Title
-          </label>
-          <input
-            type="text"
-            id="title"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            placeholder="Enter the article title..."
-            disabled={loading}
-            className="w-full p-4 bg-black/30 border border-white/10 rounded-lg text-white text-base transition-all duration-300 focus:outline-none focus:border-rose-500 focus:ring-2 focus:ring-rose-500/20 disabled:opacity-50 placeholder-gray-500"
-          />
-        </div>
-
-        {/* Content Textarea */}
-        <div className="mb-6">
-          <label htmlFor="content" className="flex justify-between items-center text-white font-medium mb-2">
-            Article Content
-            <span className="text-sm text-gray-400 font-normal">{content.length}/10000</span>
-          </label>
-          <textarea
-            id="content"
-            value={content}
-            onChange={(e) => setContent(e.target.value)}
-            placeholder="Paste the article content here..."
-            rows={12}
-            maxLength={10000}
-            disabled={loading}
-            className="w-full p-4 bg-black/30 border border-white/10 rounded-lg text-white text-base transition-all duration-300 focus:outline-none focus:border-rose-500 focus:ring-2 focus:ring-rose-500/20 disabled:opacity-50 resize-y min-h-[200px] placeholder-gray-500"
-          />
-        </div>
-
-        {/* Error Message */}
-        {error && (
-          <div className="bg-red-500/10 border border-red-500 text-red-500 p-4 rounded-lg mb-6 flex items-center gap-2">
-            <span>⚠️</span> {error}
+        <form onSubmit={handleSubmit} className="glass-card border-white/10 bg-[#121226]/85 p-6 md:p-10">
+          <div className="mb-7">
+            <label htmlFor="title" className="mb-2 block text-[1.1rem] font-semibold text-white">
+              Article Title
+            </label>
+            <input
+              type="text"
+              id="title"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="Enter the headline or claim title..."
+              maxLength={300}
+              disabled={loading}
+              className="w-full rounded-2xl border border-white/20 bg-black/30 p-4 text-[1.0625rem] text-white outline-none transition-all duration-300 placeholder:text-white/45 focus:border-[#ff5722] focus:ring-2 focus:ring-[#ff5722]/30"
+            />
           </div>
-        )}
 
-        {/* Action Buttons */}
-        <div className="flex gap-4 justify-end">
-          <button 
-            type="button" 
-            onClick={handleClear} 
-            disabled={loading}
-            className="bg-transparent text-gray-400 border border-gray-400 px-6 py-3 rounded-lg cursor-pointer transition-all duration-300 hover:text-white hover:border-white disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            Clear
-          </button>
-          <button 
-            type="submit" 
-            disabled={loading}
-            className="bg-rose-500 text-white px-8 py-3 rounded-lg text-base cursor-pointer flex items-center gap-2 transition-all duration-300 hover:bg-rose-600 disabled:opacity-60 disabled:cursor-not-allowed border-none"
-          >
-            {loading ? (
-              <>
-                <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                Analyzing...
-              </>
-            ) : (
-              'Analyze Content'
-            )}
-          </button>
-        </div>
-      </form>
+          <div className="mb-7">
+            <label htmlFor="content" className="mb-2 block text-[1.15rem] font-semibold text-white">
+              Article Content
+            </label>
+            <textarea
+              id="content"
+              value={content}
+              onChange={(e) => setContent(e.target.value)}
+              placeholder="Paste the news article or claim you want to verify..."
+              rows={10}
+              maxLength={10000}
+              disabled={loading}
+              className="min-h-[200px] w-full resize-y rounded-2xl border border-white/20 bg-black/30 p-5 text-[1.0625rem] text-white outline-none transition-all duration-300 placeholder:text-white/45 focus:border-[#ff5722] focus:ring-2 focus:ring-[#ff5722]/30"
+            />
+            <div className="mt-2 text-right text-base text-white/60">{content.length}/10000</div>
+          </div>
 
-      {/* Info Section */}
-      <div className="mt-8 p-6 bg-green-500/10 border border-green-500/30 rounded-xl">
-        <h3 className="text-green-500 font-semibold mb-4">How it works:</h3>
-        <ol className="text-gray-400 pl-6 list-decimal space-y-2">
-          <li>Enter the article title and/or content</li>
-          <li>Our AI cross-references with trusted sources</li>
-          <li>Get a detailed credibility analysis</li>
-        </ol>
+          {error && (
+            <div className="mb-7 rounded-2xl border border-red-400/70 bg-red-500/15 px-4 py-4 text-[1.0625rem] text-red-200">
+              {error}
+            </div>
+          )}
+
+          <div className="flex flex-col gap-4 sm:flex-row sm:justify-end">
+            <button
+              type="button"
+              onClick={handleClear}
+              disabled={loading}
+              className="btn-outline border-white/45"
+            >
+              Clear
+            </button>
+            <button type="submit" disabled={loading} className="btn-pill">
+              {loading ? 'Analyzing...' : 'Analyze Now'}
+            </button>
+          </div>
+        </form>
       </div>
-    </div>
+    </section>
   );
 }
 

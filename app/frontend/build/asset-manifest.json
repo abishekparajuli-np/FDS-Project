@@ -1,0 +1,18 @@
+{
+  "files": {
+    "main.css": "/static/css/main.e233f0c1.css",
+    "main.js": "/static/js/main.31a71d10.js",
+    "static/media/stats-crowd.jpg": "/static/media/stats-crowd.eb1e0964a95544fd46d4.jpg",
+    "static/media/sources-pattern.png": "/static/media/sources-pattern.d36456e22cf41df69a79.png",
+    "static/media/hero-newsroom.jpg": "/static/media/hero-newsroom.95020c033f0f6957c6ee.jpg",
+    "static/media/process-bg.jpg": "/static/media/process-bg.adbd1710e78f29a10723.jpg",
+    "static/media/analyzer-bg.jpg": "/static/media/analyzer-bg.c8ef8860111115592202.jpg",
+    "index.html": "/index.html",
+    "main.e233f0c1.css.map": "/static/css/main.e233f0c1.css.map",
+    "main.31a71d10.js.map": "/static/js/main.31a71d10.js.map"
+  },
+  "entrypoints": [
+    "static/css/main.e233f0c1.css",
+    "static/js/main.31a71d10.js"
+  ]
+}

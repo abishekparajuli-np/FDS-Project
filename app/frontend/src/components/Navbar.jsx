@@ -5,52 +5,50 @@ function Navbar({ currentPage, onNavigate, isHealthy }) {
     { key: 'home', label: 'Home' },
     { key: 'analyze', label: 'Analyze' },
     { key: 'sources', label: 'Sources' },
-    { key: 'evaluation', label: 'Model Evaluation' },
   ];
 
   return (
-    <nav className="flex justify-between items-center px-8 py-4 bg-gradient-to-r from-slate-900 to-slate-800 shadow-lg sticky top-0 z-50">
-      {/* Brand */}
-      <div 
-        className="flex items-center gap-2 cursor-pointer" 
-        onClick={() => onNavigate('home')}
-      >
-        <span className="text-3xl">🔍</span>
-        <h1 className="text-rose-500 text-2xl font-bold m-0">NirikshanAI</h1>
-      </div>
+    <nav className="sticky top-0 z-50 border-b border-white/10 bg-[#0d0d1a]/95 backdrop-blur">
+      <div className="mx-auto flex w-full max-w-[1200px] items-center justify-between px-4 py-4 md:px-6">
+        <div
+          className="flex items-center gap-2 cursor-pointer"
+          onClick={() => onNavigate('home')}
+        >
+          <h1 className="m-0 text-2xl font-extrabold text-white">Niyantran AI</h1>
+        </div>
 
-      {/* Menu */}
-      <ul className="flex list-none gap-2 m-0 p-0">
-        {navItems.map((item) => (
-          <li key={item.key}>
-            <button
-              className={`px-5 py-2.5 rounded-lg text-base transition-all duration-300 border-none cursor-pointer
-                ${currentPage === item.key 
-                  ? 'bg-rose-500 text-white' 
-                  : 'bg-transparent text-gray-400 hover:text-white hover:bg-rose-500/20'
+        <ul className="m-0 hidden list-none gap-2 p-0 md:flex">
+          {navItems.map((item) => (
+            <li key={item.key}>
+              <button
+                className={`cursor-pointer rounded-full border-none px-6 py-3 text-base font-semibold transition-all duration-300
+                ${currentPage === item.key
+                  ? 'bg-[#ff5722] text-white shadow-[0_10px_24px_rgba(255,87,34,0.35)]'
+                  : 'bg-transparent text-white/80 hover:bg-white/10 hover:text-white'
                 }`}
-              onClick={() => onNavigate(item.key)}
-            >
-              {item.label}
-            </button>
-          </li>
-        ))}
-      </ul>
+                onClick={() => onNavigate(item.key)}
+              >
+                {item.label}
+              </button>
+            </li>
+          ))}
+        </ul>
 
-      {/* Status Indicator */}
-      <div className="flex items-center gap-2">
-        <span 
-          className={`w-2.5 h-2.5 rounded-full
+        <div className="flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-3 py-2">
+          <span
+            className={`w-2.5 h-2.5 rounded-full
             ${isHealthy === true ? 'bg-green-500 shadow-[0_0_8px_#4caf50]' : ''}
             ${isHealthy === false ? 'bg-red-500 shadow-[0_0_8px_#f44336]' : ''}
-            ${isHealthy === null ? 'bg-orange-500 animate-pulse-glow' : ''}
+            ${isHealthy === null ? 'bg-[#ff5722] animate-pulse-glow' : ''}
           `}
-        />
-        <span className="text-gray-400 text-sm">
-          {isHealthy === true && 'API Connected'}
-          {isHealthy === false && 'API Offline'}
-          {isHealthy === null && 'Checking...'}
-        </span>
+          />
+
+          <span className="text-sm text-white/80">
+            {isHealthy === true && 'API Connected'}
+            {isHealthy === false && 'API Offline'}
+            {isHealthy === null && 'Checking...'}
+          </span>
+        </div>
       </div>
     </nav>
   );

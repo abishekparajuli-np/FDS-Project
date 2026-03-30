@@ -1,262 +1,190 @@
 import React from 'react';
+import sourcesPattern from '../assets/sources-pattern.png';
 
 function Results({ result, onBack }) {
   if (!result) {
     return (
-      <div className="max-w-4xl mx-auto px-8 text-center py-16">
-        <p className="text-gray-400 mb-4">No results available. Please analyze content first.</p>
+      <section className="section" data-aos="fade-up">
+        <div className="section-inner text-center">
+          <p className="mb-6 text-[1.125rem] text-white/75">No results available. Please analyze content first.</p>
         <button 
           onClick={onBack}
-          className="bg-transparent text-rose-500 border border-rose-500 px-5 py-2.5 rounded-lg cursor-pointer transition-all hover:bg-rose-500/10"
+          className="btn-outline"
         >
           Go Back
         </button>
-      </div>
+        </div>
+      </section>
     );
   }
 
-  const getVerdictStyle = (verdict) => {
-    const styles = {
-      'LIKELY TRUE':   { bg: 'bg-green-500/20', border: 'border-green-500', text: 'text-green-400' },
-      'MOSTLY TRUE':   { bg: 'bg-green-500/10', border: 'border-green-400', text: 'text-green-300' },
-      'UNCERTAIN':     { bg: 'bg-yellow-500/20', border: 'border-yellow-500', text: 'text-yellow-400' },
-      'MOSTLY FALSE':  { bg: 'bg-orange-500/20', border: 'border-orange-500', text: 'text-orange-400' },
-      'LIKELY FALSE':  { bg: 'bg-red-500/20', border: 'border-red-500', text: 'text-red-400' },
+  const confidence = Math.max(0, Math.min(100, Math.round((result.final_score || 0) * 100)));
+
+  const deriveVerdict = () => {
+    const raw = (result.verdict || '').toUpperCase();
+    if (raw.includes('FALSE') || confidence < 35) {
+      return {
+        label: 'FAKE',
+        cardClass: 'bg-red-500/15 border-red-400 text-red-100',
+      };
+    }
+    if (raw.includes('TRUE') || confidence >= 70) {
+      return {
+        label: 'CREDIBLE',
+        cardClass: 'bg-green-500/15 border-green-400 text-green-100',
+      };
+    }
+    return {
+      label: 'QUESTIONABLE',
+      cardClass: 'bg-amber-500/15 border-amber-400 text-amber-100',
     };
-    return styles[verdict] || styles['UNCERTAIN'];
   };
 
-  const getScoreColor = (score) => {
-    if (score >= 0.7) return 'bg-green-500';
-    if (score >= 0.5) return 'bg-yellow-500';
-    if (score >= 0.3) return 'bg-orange-500';
-    return 'bg-red-500';
+  const buildSummary = () => {
+    const matched = result.matching_sources?.length || 0;
+    const contradicted = result.contradicting_sources?.length || 0;
+    const redFlags = result.red_flags?.slice(0, 2).join('; ');
+    const greenFlags = result.green_flags?.slice(0, 2).join('; ');
+
+    const parts = [
+      `We compared this claim against ${result.sources_checked || matched + contradicted || 0} tracked sources and found ${matched} supporting references with ${contradicted} contradictory references.`,
+    ];
+
+    if (greenFlags) {
+      parts.push(`Positive indicators include: ${greenFlags}.`);
+    }
+    if (redFlags) {
+      parts.push(`Risk indicators include: ${redFlags}.`);
+    }
+
+    return parts.join(' ');
   };
 
-  const verdictStyle = getVerdictStyle(result.verdict);
-  const finalScore = result.final_score || 0;
+  const verdict = deriveVerdict();
+  const ringStyle = {
+    background: `conic-gradient(#ff5722 ${confidence * 3.6}deg, rgba(255,255,255,0.12) 0deg)`,
+  };
+
+  const sourceCards = [
+    ...(result.matching_sources || []).map((source) => ({
+      ...source,
+      credibilityBadge: 'Trusted',
+      badgeClass: 'bg-emerald-100 text-emerald-800',
+    })),
+    ...(result.contradicting_sources || []).map((source) => ({
+      ...source,
+      credibilityBadge: 'Flagged',
+      badgeClass: 'bg-red-100 text-red-800',
+    })),
+  ];
+
+  const getFavicon = (url) => {
+    if (!url) return 'https://www.google.com/s2/favicons?sz=64&domain=news';
+    try {
+      const parsed = new URL(url);
+      return `https://www.google.com/s2/favicons?sz=64&domain=${parsed.hostname}`;
+    } catch {
+      return 'https://www.google.com/s2/favicons?sz=64&domain=news';
+    }
+  };
+
+  const getSnippet = (source) => {
+    if (source.snippet) return source.snippet;
+    if (source.title) return source.title;
+    return 'Relevant reporting found for this claim.';
+  };
 
   return (
-    <div className="max-w-5xl mx-auto px-8 pb-12">
-      {/* Header */}
-      <div className="flex justify-between items-center mb-8">
-        <h1 className="text-3xl font-bold text-white">📊 Analysis Results</h1>
+    <>
+      <section className="section bg-[#0d0d1a]" data-aos="fade-up">
+        <div className="section-inner">
+          <div className="mb-8 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+            <h1 className="section-title m-0">Analysis Results</h1>
         <button 
           onClick={onBack}
-          className="bg-transparent text-rose-500 border border-rose-500 px-5 py-2.5 rounded-lg cursor-pointer transition-all hover:bg-rose-500/10"
+          className="btn-outline"
         >
-          ← Analyze Another
+          Analyze Another
         </button>
       </div>
 
-      {/* Main Verdict */}
-      <div className={`text-center p-8 rounded-2xl border-2 mb-8 ${verdictStyle.bg} ${verdictStyle.border}`}>
-        <div className="text-6xl mb-4">
-          {result.verdict === 'LIKELY TRUE' && '✅'}
-          {result.verdict === 'MOSTLY TRUE' && '👍'}
-          {result.verdict === 'UNCERTAIN' && '❓'}
-          {result.verdict === 'MOSTLY FALSE' && '⚠️'}
-          {result.verdict === 'LIKELY FALSE' && '❌'}
-        </div>
-        <h2 className={`text-4xl font-bold mb-2 ${verdictStyle.text}`}>
-          {result.verdict}
-        </h2>
-        <p className="text-white text-2xl">
-          Credibility Score: <span className="font-bold">{(finalScore * 100).toFixed(1)}%</span>
-        </p>
-        <p className="text-gray-400 mt-2">
-          Processed in {result.processing_time_s}s • {result.sources_checked} sources checked
-        </p>
-      </div>
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1.1fr_0.9fr]">
+            <article className={`rounded-3xl border p-8 ${verdict.cardClass}`}>
+              <h2 className="mb-3 text-[1.5rem] font-bold tracking-wide">Verdict</h2>
+              <div className="mb-5 text-[clamp(2rem,6vw,2.8rem)] font-extrabold leading-none">{verdict.label}</div>
+              <p className="m-0 text-[1.125rem] text-white/90">
+                Processed in {result.processing_time_s || 0}s with {result.sources_checked || 0} sources checked.
+              </p>
+            </article>
 
-      {/* Score Breakdown */}
-      <div className="mb-8">
-        <h2 className="text-xl font-semibold text-white mb-4">📈 Score Breakdown</h2>
-        <div className="bg-slate-900/80 p-6 rounded-xl border border-white/10">
-          {result.score_breakdown?.map((item, index) => (
-            <div key={index} className="mb-4 last:mb-0">
-              <div className="flex justify-between text-sm mb-1">
-                <span className="text-gray-300">{item.factor}</span>
-                <span className="text-white font-medium">
-                  {(item.score * 100).toFixed(0)}% (weight: {(item.weight * 100).toFixed(0)}%)
-                </span>
+            <article className="rounded-3xl border border-white/15 bg-white/5 p-8 text-white">
+              <h2 className="mb-6 text-[1.5rem] font-bold">Confidence Score</h2>
+              <div className="mx-auto grid h-[170px] w-[170px] place-items-center rounded-full p-3" style={ringStyle}>
+                <div className="grid h-full w-full place-items-center rounded-full bg-[#0d0d1a] text-[2.625rem] font-extrabold text-white">
+                  {confidence}%
+                </div>
               </div>
-              <div className="h-3 bg-white/10 rounded-full overflow-hidden">
-                <div 
-                  className={`h-full rounded-full transition-all duration-500 ${getScoreColor(item.score)}`}
-                  style={{ width: `${item.score * 100}%` }}
-                />
-              </div>
-            </div>
-          ))}
+            </article>
+          </div>
+
+          <article className="mt-6 rounded-2xl border-l-[6px] border-[#ff5722] bg-white p-7 text-[#111426] shadow-[0_16px_45px_rgba(0,0,0,0.22)]">
+            <h3 className="mb-3 text-[1.5rem] font-bold">Why we think this:</h3>
+            <p className="m-0 text-[1.125rem] leading-relaxed">{buildSummary()}</p>
+          </article>
         </div>
-      </div>
+      </section>
 
-      {/* Flags Section */}
-      <div className="grid md:grid-cols-2 gap-6 mb-8">
-        {/* Red Flags */}
-        {result.red_flags?.length > 0 && (
-          <div className="bg-red-500/10 border border-red-500/30 p-6 rounded-xl">
-            <h3 className="text-lg font-semibold text-red-400 mb-3">🚩 Red Flags</h3>
-            <ul className="space-y-2">
-              {result.red_flags.map((flag, index) => (
-                <li key={index} className="text-red-300 flex items-start gap-2">
-                  <span>•</span>
-                  <span>{flag}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
-
-        {/* Green Flags */}
-        {result.green_flags?.length > 0 && (
-          <div className="bg-green-500/10 border border-green-500/30 p-6 rounded-xl">
-            <h3 className="text-lg font-semibold text-green-400 mb-3">✅ Green Flags</h3>
-            <ul className="space-y-2">
-              {result.green_flags.map((flag, index) => (
-                <li key={index} className="text-green-300 flex items-start gap-2">
-                  <span>•</span>
-                  <span>{flag}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
-      </div>
-
-      {/* Matching Sources */}
-      {result.matching_sources?.length > 0 && (
-        <div className="mb-8">
-          <h2 className="text-xl font-semibold text-white mb-4">
-            ✓ Matching Sources ({result.matching_sources.length})
-            {result.nepal_sources_count > 0 && (
-              <span className="text-sm font-normal text-gray-400 ml-2">
-                ({result.nepal_sources_count} from Nepal)
-              </span>
-            )}
-          </h2>
-          <div className="space-y-3">
-            {result.matching_sources.map((source, index) => (
-              <div key={index} className="bg-slate-900/80 p-4 rounded-xl border border-white/10 hover:border-green-500/30 transition-colors">
-                <div className="flex items-start justify-between gap-4">
+      <section
+        className="section bg-[#f9f5f0]"
+        data-aos="fade-up"
+        style={{
+          backgroundImage: `linear-gradient(rgba(249,245,240,0.95), rgba(249,245,240,0.95)), url(${sourcesPattern})`,
+          backgroundSize: 'cover',
+          backgroundPosition: 'center',
+          backgroundAttachment: 'fixed',
+        }}
+      >
+        <div className="section-inner">
+          <h2 className="section-title section-title-dark">Cross-Referenced Sources</h2>
+          <div className="orange-underline" />
+          <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+            {sourceCards.map((source, index) => (
+              <article key={`${source.source || source.title || 'source'}-${index}`} className="rounded-2xl border-l-[6px] border-[#ff5722] bg-white p-6 shadow-[0_10px_28px_rgba(0,0,0,0.09)]">
+                <div className="flex items-start gap-4">
+                  <img src={getFavicon(source.url)} alt="source logo" className="h-12 w-12 rounded-full border border-slate-200" />
                   <div className="flex-1">
-                    <h4 className="text-white font-medium mb-1">{source.title}</h4>
-                    <div className="flex flex-wrap gap-2 text-sm">
-                      <span className="text-gray-400">{source.source}</span>
-                      <span className="text-gray-600">•</span>
-                      <span className={`px-2 py-0.5 rounded text-xs font-medium
-                        ${source.tier === 1 ? 'bg-green-500/20 text-green-400' : 
-                          source.tier === 2 ? 'bg-blue-500/20 text-blue-400' : 
-                          'bg-orange-500/20 text-orange-400'}`}
+                    <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                      <h3 className="m-0 text-[1.25rem] font-bold text-[#121421]">{source.source || 'News Source'}</h3>
+                      <span className={`rounded-full px-3 py-1 text-sm font-semibold ${source.badgeClass}`}>
+                        {source.credibilityBadge}
+                      </span>
+                    </div>
+                    <p className="mb-3 text-base text-slate-600">{getSnippet(source)}</p>
+                    {source.url ? (
+                      <a
+                        href={source.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-base font-semibold text-[#e8490f] no-underline hover:text-[#ff5722]"
                       >
-                        Tier {source.tier}
-                      </span>
-                      <span className="text-gray-600">•</span>
-                      <span className="text-gray-400">
-                        {(source.similarity * 100).toFixed(0)}% match
-                      </span>
-                    </div>
+                        View Article -&gt;
+                      </a>
+                    ) : (
+                      <span className="text-base font-semibold text-[#e8490f]">No external link available</span>
+                    )}
                   </div>
-                  {source.url && (
-                    <a 
-                      href={source.url} 
-                      target="_blank" 
-                      rel="noopener noreferrer"
-                      className="text-rose-500 hover:text-rose-400 text-sm whitespace-nowrap"
-                    >
-                      View →
-                    </a>
-                  )}
                 </div>
-              </div>
+              </article>
             ))}
           </div>
+          {sourceCards.length === 0 && (
+            <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center text-[1.125rem] text-slate-600">
+              No cross-referenced sources found for this analysis.
+            </div>
+          )}
         </div>
-      )}
-
-      {/* Contradicting Sources */}
-      {result.contradicting_sources?.length > 0 && (
-        <div className="mb-8">
-          <h2 className="text-xl font-semibold text-white mb-4">
-            ⚠️ Contradicting Sources ({result.contradicting_sources.length})
-          </h2>
-          <div className="space-y-3">
-            {result.contradicting_sources.map((source, index) => (
-              <div key={index} className="bg-red-500/5 p-4 rounded-xl border border-red-500/20">
-                <div className="flex items-start justify-between gap-4">
-                  <div className="flex-1">
-                    <h4 className="text-white font-medium mb-1">{source.title}</h4>
-                    <div className="flex flex-wrap gap-2 text-sm">
-                      <span className="text-gray-400">{source.source}</span>
-                      <span className="text-gray-600">•</span>
-                      <span className="text-red-400">
-                        {(source.credibility * 100).toFixed(0)}% credibility
-                      </span>
-                    </div>
-                  </div>
-                  {source.url && (
-                    <a 
-                      href={source.url} 
-                      target="_blank" 
-                      rel="noopener noreferrer"
-                      className="text-rose-500 hover:text-rose-400 text-sm whitespace-nowrap"
-                    >
-                      View →
-                    </a>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Extracted Entities */}
-      {(result.extracted_entities?.people_and_orgs?.length > 0 || result.extracted_entities?.locations?.length > 0) && (
-        <div className="mb-8">
-          <h2 className="text-xl font-semibold text-white mb-4">🔍 Extracted Entities</h2>
-          <div className="bg-slate-900/80 p-6 rounded-xl border border-white/10">
-            {result.extracted_entities.people_and_orgs?.length > 0 && (
-              <div className="mb-4">
-                <h4 className="text-gray-400 text-sm mb-2">People & Organizations</h4>
-                <div className="flex flex-wrap gap-2">
-                  {result.extracted_entities.people_and_orgs.map((entity, index) => (
-                    <span key={index} className="bg-blue-500/20 text-blue-300 px-3 py-1 rounded-full text-sm">
-                      {entity}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            )}
-            {result.extracted_entities.locations?.length > 0 && (
-              <div>
-                <h4 className="text-gray-400 text-sm mb-2">Locations</h4>
-                <div className="flex flex-wrap gap-2">
-                  {result.extracted_entities.locations.map((location, index) => (
-                    <span key={index} className="bg-purple-500/20 text-purple-300 px-3 py-1 rounded-full text-sm">
-                      📍 {location}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Raw Data */}
-      <div className="mt-8">
-        <details className="group">
-          <summary className="text-gray-400 cursor-pointer p-4 bg-slate-900/80 rounded-lg hover:text-white transition-colors">
-            View Raw API Response
-          </summary>
-          <pre className="bg-black/30 p-4 rounded-lg text-gray-400 overflow-x-auto text-sm mt-2 max-h-96">
-            {JSON.stringify(result, null, 2)}
-          </pre>
-        </details>
-      </div>
-    </div>
+      </section>
+    </>
   );
 }
 
