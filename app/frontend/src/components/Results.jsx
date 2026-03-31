@@ -118,7 +118,7 @@ function Results({ result, onBack }) {
             </article>
 
             <article className="rounded-3xl border border-white/15 bg-white/5 p-8 text-white">
-              <h2 className="mb-6 text-[1.5rem] font-bold">Confidence Score</h2>
+              <h2 className="mb-6 text-[1.5rem] font-bold">Credibility Score</h2>
               <div className="mx-auto grid h-[170px] w-[170px] place-items-center rounded-full p-3" style={ringStyle}>
                 <div className="grid h-full w-full place-items-center rounded-full bg-[#0d0d1a] text-[2.625rem] font-extrabold text-white">
                   {confidence}%

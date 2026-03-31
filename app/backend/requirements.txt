@@ -4,3 +4,10 @@ numpy
 pandas
 scikit-learn
 joblib
+requests
+feedparser
+vaderSentiment
+nltk
+sentence-transformers
+spacy
+python-dateutil
