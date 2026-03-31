@@ -1,5 +1,5 @@
 from flask import jsonify, Blueprint, request
-from crossreferenceengine import CrossReferenceEngine, TRUSTED_SOURCES
+from engine import CrossReferenceEngine, TRUSTED_SOURCES  # corrected import
 
 api = Blueprint('api', __name__, url_prefix='/api')
 
@@ -8,23 +8,23 @@ print("Initializing CrossReferenceEngine...")
 engine = CrossReferenceEngine()
 print("Engine ready!")
 
-# ============ NEW WEIGHTS STRUCTURE FOR NEW SCORING SYSTEM ============
+# ============ WEIGHTS REFLECTING CURRENT SCORING SYSTEM ============
 NEW_WEIGHTS = {
-    "base_credibility": 0.40,
+    "base_credibility": 0.45,
     "similarity_boost": 0.25,
     "coverage_boost": {
-        "15_plus_sources": 0.30,
-        "10_plus_sources": 0.25,
-        "7_plus_sources": 0.20,
-        "5_plus_sources": 0.15,
+        "15_plus_sources": 0.35,
+        "10_plus_sources": 0.28,
+        "7_plus_sources": 0.22,
+        "5_plus_sources": 0.16,
         "3_plus_sources": 0.10,
         "2_sources": 0.05,
         "1_source": 0.0,
     },
     "tier1_multiplier": {
-        "3_plus_sources": 1.30,
-        "2_sources": 1.20,
-        "1_source": 1.10,
+        "3_plus_sources": 1.35,
+        "2_sources": 1.22,
+        "1_source": 1.12,
         "0_sources": 1.0,
     }
 }
@@ -65,7 +65,7 @@ def health():
 def analyze():
     """
     Analyze a claim/news and return verification score
-    
+
     Expected JSON:
     {
         "title": "Claim title",
@@ -77,7 +77,7 @@ def analyze():
         return jsonify({
             'error': 'The requested data should be JSON'
         }), 400
-    
+
     title = data.get("title", "").strip()
     content = data.get("content", "").strip()
 
@@ -85,7 +85,7 @@ def analyze():
         return jsonify({
             'error': 'At least one of title or content is required'
         }), 400
-    
+
     if len(content) > 10000:
         content = content[:10000]
 
@@ -93,9 +93,9 @@ def analyze():
         print(f"\n{'='*60}")
         print(f"📝 ANALYZING: {title[:50]}...")
         print(f"{'='*60}")
-        
+
         result = engine.analyze(title, content)
-        
+
         # Enhanced debug output
         print(f"\n[RESULTS]")
         print(f"  ✅ Sources checked: {result.get('sources_checked', 0)}")
@@ -108,9 +108,9 @@ def analyze():
         print(f"  ✅ Final score: {result.get('final_score', 0):.4f}")
         print(f"  ✅ Verdict: {result.get('verdict', 'N/A')}")
         print(f"{'='*60}\n")
-        
+
         return jsonify(result)
-    
+
     except Exception as e:
         import traceback
         traceback.print_exc()
@@ -134,7 +134,7 @@ def get_sources():
             'lang': info.get("lang", "en"),
             'region': info.get("region", "unknown")
         } for domain, info in sorted(
-            TRUSTED_SOURCES.items(), 
+            TRUSTED_SOURCES.items(),
             key=lambda x: (-x[1]["credibility"], x[1]["name"])
         )
     ]
@@ -153,16 +153,16 @@ def get_sources():
 @api.route('/weights', methods=['GET'])
 def get_weights():
     """
-    Get the NEW SCORING SYSTEM weights and thresholds
+    Get the current scoring system weights and thresholds
     """
     return jsonify({
-        'scoring_system': 'NEW - Coverage-Multiplier Based',
+        'scoring_system': 'Coverage-Multiplier Based (current)',
         'weights': NEW_WEIGHTS,
         'verdict_thresholds': VERDICT_THRESHOLDS,
         'description': {
-            'base_credibility': 'Average credibility of matching sources (40% weight)',
+            'base_credibility': 'Average credibility of matching sources (45% weight)',
             'similarity_boost': 'Semantic similarity between claim and sources (25% weight)',
-            'coverage_boost': 'Exponential boost based on number of sources (25% weight)',
+            'coverage_boost': 'Boost based on number of sources (up to +0.35)',
             'tier1_multiplier': 'Multiplicative boost if Tier-1 sources confirm (Reuters, AP, etc.)',
             'final_calculation': '(base + similarity + coverage) × tier1_multiplier'
         }
@@ -178,7 +178,7 @@ def get_thresholds():
         'verdict_ranges': {
             'LIKELY_TRUE': f">= {VERDICT_THRESHOLDS['LIKELY_TRUE']} (80+%)",
             'MOSTLY_TRUE': f"{VERDICT_THRESHOLDS['MOSTLY_TRUE']}-{VERDICT_THRESHOLDS['LIKELY_TRUE']} (65-80%)",
-            'MIXED': f"{VERDICT_THRESHOLDS['QUESTIONABLE']}-{VERDICT_THRESHOLDS['MOSTLY_TRUE']} (45-65%)",
+            'MIXED': f"{VERDICT_THRESHOLDS['MIXED']}-{VERDICT_THRESHOLDS['MOSTLY_TRUE']} (45-65%)",
             'QUESTIONABLE': f"{VERDICT_THRESHOLDS['QUESTIONABLE']}-{VERDICT_THRESHOLDS['MIXED']} (25-45%)",
             'LIKELY_FALSE': f"< {VERDICT_THRESHOLDS['QUESTIONABLE']} (<25%)",
             'UNVERIFIED': '0.0 (no sources found)',
@@ -188,11 +188,11 @@ def get_thresholds():
             '1_source': 'Low confidence (no coverage boost)',
             '2_sources': 'Very low confidence (+0.05 coverage)',
             '3_plus_sources': 'Low-medium confidence (+0.10 coverage)',
-            '5_plus_sources': 'Medium confidence (+0.15 coverage)',
-            '7_plus_sources': 'Good confidence (+0.20 coverage)',
-            '10_plus_sources': 'High confidence (+0.25 coverage)',
-            '15_plus_sources': 'Very high confidence (+0.30 coverage)',
-            'with_tier1_sources': 'Multiplied by 1.10-1.30 depending on count',
+            '5_plus_sources': 'Medium confidence (+0.16 coverage)',
+            '7_plus_sources': 'Good confidence (+0.22 coverage)',
+            '10_plus_sources': 'High confidence (+0.28 coverage)',
+            '15_plus_sources': 'Very high confidence (+0.35 coverage)',
+            'with_tier1_sources': 'Multiplied by 1.12-1.35 depending on count',
         }
     })
 
@@ -204,7 +204,7 @@ def explain_score(score):
     """
     if score < 0 or score > 1:
         return jsonify({'error': 'Score must be between 0 and 1'}), 400
-    
+
     if score >= VERDICT_THRESHOLDS['LIKELY_TRUE']:
         verdict = 'LIKELY TRUE'
         explanation = 'Strong evidence from multiple credible sources'
@@ -220,7 +220,7 @@ def explain_score(score):
     else:
         verdict = 'LIKELY FALSE'
         explanation = 'Little to no evidence, contradicted by sources'
-    
+
     return jsonify({
         'score': round(score, 4),
         'verdict': verdict,
