@@ -59,7 +59,7 @@ function App() {
         <div className="footer-accent" />
         <div className="footer-content">
           <div>
-            <h2 className="footer-logo">Niyantran AI</h2>
+            <h2 className="footer-logo">Nirikshyak AI</h2>
             <p className="footer-tagline">Fact-check news with trusted source references.</p>
           </div>
           <div className="footer-links">

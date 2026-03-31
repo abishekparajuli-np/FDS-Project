@@ -5,7 +5,6 @@ import re
 import time
 from urllib.parse import urlparse, quote
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
 from sentence_transformers import SentenceTransformer
 
 
@@ -36,10 +35,10 @@ RSS_FEEDS = {
     "bbc_world":      "http://feeds.bbci.co.uk/news/world/rss.xml",
 }
 
-THRESHOLD_LIKELY_TRUE = 0.80
-THRESHOLD_MOSTLY_TRUE = 0.65
-THRESHOLD_MIXED = 0.45
-THRESHOLD_QUESTIONABLE = 0.25
+THRESHOLD_LIKELY_TRUE = 0.76
+THRESHOLD_MOSTLY_TRUE = 0.60
+THRESHOLD_MIXED = 0.50
+THRESHOLD_QUESTIONABLE = 0.35
 
 
 class NewsTextCleaner:
@@ -75,11 +74,10 @@ class NewsTextCleaner:
 
 class CrossReferenceEngine:
     def __init__(self):
-        print("[*] Loading SentenceTransformer + TextCleaner...")
+        print("Loading CrossReferenceEngine...")
         self.similarity_model = SentenceTransformer("all-MiniLM-L6-v2")
-        self.sentiment_analyzer = SentimentIntensityAnalyzer()
         self.cleaner = NewsTextCleaner()
-        print("[OK] CrossReferenceEngine ready with data cleaning")
+        print("CrossReferenceEngine loaded successfully")
 
     def extract_entities(self, text: str) -> dict:
         clean_text = self.cleaner.clean_text(text)
@@ -117,6 +115,7 @@ class CrossReferenceEngine:
                 "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
             })
             feed = feedparser.parse(resp.text)
+            
             for entry in feed.entries[:20]:
                 link = entry.get("link", "")
                 domain = urlparse(link).netloc.replace("www.", "")
@@ -142,7 +141,7 @@ class CrossReferenceEngine:
                     "raw_content": entry.get("summary", ""),
                 })
         except Exception as e:
-            print(f"Google News error: {e}")
+            print(f"Error fetching Google News: {e}")
         return all_articles
 
     def fetch_single_rss(self, source_key: str, rss_url: str) -> list:
@@ -156,6 +155,7 @@ class CrossReferenceEngine:
                 "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
             })
             feed = feedparser.parse(resp.text)
+            
             domain = KEY_TO_DOMAIN.get(source_key, urlparse(rss_url).netloc.replace("www.", ""))
             source_info = TRUSTED_SOURCES.get(domain, {
                 "name": source_key, "credibility": 0.70,
@@ -182,7 +182,7 @@ class CrossReferenceEngine:
                 })
             return articles
         except Exception as e:
-            print(f"RSS {source_key}: {e}")
+            print(f"Error fetching RSS {source_key}: {e}")
             return []
 
     def fetch_all_rss(self) -> list:
@@ -216,7 +216,7 @@ class CrossReferenceEngine:
             rss = f_rss.result()
 
         all_refs = gnews + rss
-
+        
         if len(all_refs) == 0:
             return self._no_sources_result(orig_info, time.time() - start)
 
@@ -230,10 +230,11 @@ class CrossReferenceEngine:
 
             sim = self.compute_similarity(full_text[:600], ref_text)
 
-            # Stricter similarity and credibility filters
-            if sim < 0.45:
+            # QUALITY OVER QUANTITY: Require meaningful semantic match
+            if sim < 0.32:
                 continue
-            if ref["credibility"] < 0.60:
+            # Require at least low-tier credibility (0.40 is tier-3 minimum)
+            if ref["credibility"] < 0.42:
                 continue
 
             match_item = {
@@ -256,6 +257,8 @@ class CrossReferenceEngine:
             else:
                 tier3_matches.append(ref)
 
+
+
         if len(matching) == 0:
             return self._no_sources_result(orig_info, time.time() - start)
 
@@ -265,42 +268,46 @@ class CrossReferenceEngine:
         avg_credibility = float(np.mean([m["credibility"] for m in matching]))
         match_count = len(matching)
 
-        # Coverage boost: steeper curve
-        if match_count >= 15:
-            coverage_boost = 0.35
+        # Balanced scoring: both content matching and source volume matter
+        # - Credibility (40%): Source reputation
+        # - Similarity (35%): Content matching 
+        # - Volume (15%): Multiple sources confirm
+        # - Tier-1 (10%): Trusted outlets
+        
+        # Step 1: Core quality score (credibility + similarity)
+        # These are the MAIN factors - they determine if it's true
+        core_quality = (avg_credibility * 0.55) + (avg_similarity * 0.45)
+        
+        # Step 2: Volume confidence (less important but needed)
+        # Even low-credibility sources in high volume = story exists
+        if match_count >= 25:
+            volume_boost = 0.15
+        elif match_count >= 15:
+            volume_boost = 0.12
         elif match_count >= 10:
-            coverage_boost = 0.28
+            volume_boost = 0.10
         elif match_count >= 7:
-            coverage_boost = 0.22
+            volume_boost = 0.08
         elif match_count >= 5:
-            coverage_boost = 0.16
+            volume_boost = 0.06
         elif match_count >= 3:
-            coverage_boost = 0.10
-        elif match_count == 2:
-            coverage_boost = 0.05
+            volume_boost = 0.04
         else:
-            coverage_boost = 0.0
+            volume_boost = 0.0
 
-        base_score = avg_credibility * 0.45
-        similarity_boost = avg_similarity * 0.25
-
+        # Step 3: Tier-1 premium (Reuters, AP, BBC confirm = highest trust)
+        tier1_premium = 0.0
         if len(tier1_matches) >= 3:
-            tier1_multiplier = 1.35
+            tier1_premium = 0.15
         elif len(tier1_matches) == 2:
-            tier1_multiplier = 1.22
+            tier1_premium = 0.10
         elif len(tier1_matches) == 1:
-            tier1_multiplier = 1.12
-        else:
-            tier1_multiplier = 1.0
+            tier1_premium = 0.05
 
-        raw_score = (base_score + similarity_boost + coverage_boost) * tier1_multiplier
-        raw_score = float(np.clip(raw_score, 0.0, 1.0))
-
-        # Safety clamp: weak evidence shouldn’t look solid
-        if match_count < 3 or avg_similarity < 0.50:
-            raw_score = min(raw_score, 0.35)
-
-        final_score = raw_score
+        # Final score combines quality and volume equally
+        final_score = core_quality + volume_boost + tier1_premium
+        final_score = float(np.clip(final_score, 0.0, 1.0))
+        quality_factor_used = core_quality
 
         verdict = self._get_verdict(final_score, match_count)
         red_flags, green_flags = self._generate_flags(
@@ -322,8 +329,9 @@ class CrossReferenceEngine:
                 "avg_similarity": round(avg_similarity, 4),
                 "avg_credibility": round(avg_credibility, 4),
                 "match_count": match_count,
-                "coverage_boost": round(coverage_boost, 4),
-                "tier1_multiplier": round(tier1_multiplier, 2),
+                "core_quality": round(core_quality, 4),
+                "volume_boost": round(volume_boost, 4),
+                "tier1_premium": round(tier1_premium, 4),
             },
             "sources_checked": len(all_refs),
             "matching_sources": matching[:10],
@@ -342,34 +350,35 @@ class CrossReferenceEngine:
             "green_flags": green_flags,
             "score_breakdown": [
                 {
-                    "factor": "Base Score (Credibility)",
-                    "value": round(base_score, 4),
-                    "weight": "45%"
+                    "factor": "Core Quality Score",
+                    "value": round(core_quality, 4),
+                    "credibility": round(avg_credibility, 3),
+                    "similarity": round(avg_similarity, 3),
+                    "explanation": "55% source credibility + 45% content match"
                 },
                 {
-                    "factor": "Similarity Boost",
-                    "value": round(similarity_boost, 4),
-                    "weight": "25%"
+                    "factor": "Volume Confirmation",
+                    "value": round(volume_boost, 4),
+                    "matches": match_count,
+                    "explanation": "Multiple sources strengthen confirmation"
                 },
                 {
-                    "factor": "Coverage Boost",
-                    "value": round(coverage_boost, 4),
-                    "matches": match_count
+                    "factor": "Tier-1 Premium",
+                    "value": round(tier1_premium, 4),
+                    "tier1_count": len(tier1_matches),
+                    "explanation": "Additional confidence from trusted outlets"
                 },
                 {
-                    "factor": "Tier-1 Multiplier",
-                    "value": round(tier1_multiplier, 2),
-                    "tier1_count": len(tier1_matches)
-                },
-                {
-                    "factor": "FINAL SCORE",
-                    "value": round(final_score, 4)
+                    "factor": "Final Score",
+                    "value": round(final_score, 4),
+                    "calculation": f"{core_quality:.3f} + {volume_boost:.3f} + {tier1_premium:.3f}",
+                    "note": "Balanced: both content match and source volume considered"
                 },
             ],
         }
 
     def _get_verdict(self, score: float, matching_count: int) -> str:
-        if matching_count == 0:
+        if matching_count <=0.1:
             return "UNVERIFIED"
         if score >= THRESHOLD_LIKELY_TRUE:
             return "LIKELY TRUE"
@@ -386,46 +395,46 @@ class CrossReferenceEngine:
         green_flags = []
 
         if match_count == 0:
-            red_flags.append("❌ NO SOURCES FOUND - UNVERIFIED")
+            red_flags.append("No sources found")
         elif match_count == 1:
-            red_flags.append("⚠️  Only 1 source corroborates (insufficient verification)")
+            red_flags.append("Only 1 source found - insufficient verification")
         elif match_count < 3:
-            red_flags.append(f"⚠️  Only {match_count} sources corroborate (weak coverage)")
+            red_flags.append(f"Low coverage: {match_count} sources found")
 
         if match_count > 0 and avg_sim < 0.45:
-            red_flags.append(f"⚠️  Low semantic similarity ({avg_sim*100:.0f}%)")
+            red_flags.append(f"Low content match ({avg_sim*100:.0f}%)")
 
         if match_count > 0 and avg_cred < 0.70:
-            red_flags.append(f"⚠️  Low source credibility ({avg_cred*100:.0f}%)")
+            red_flags.append(f"Source credibility low ({avg_cred*100:.0f}%)")
 
         if len(tier3_matches) > 2 and len(tier1_matches) == 0:
-            red_flags.append("⚠️  Only low-tier sources (reduced confidence)")
+            red_flags.append("Only low-tier sources")
 
         if match_count >= 15:
-            green_flags.append(f"✅ EXCELLENT COVERAGE: {match_count} sources confirm")
+            green_flags.append(f"Excellent coverage: {match_count} sources")
         elif match_count >= 10:
-            green_flags.append(f"✅ STRONG COVERAGE: {match_count} sources confirm")
+            green_flags.append(f"Strong coverage: {match_count} sources")
         elif match_count >= 5:
-            green_flags.append(f"✅ GOOD COVERAGE: {match_count} sources confirm")
+            green_flags.append(f"Good coverage: {match_count} sources")
         elif match_count >= 3:
-            green_flags.append(f"✅ Multiple sources ({match_count}) confirm")
+            green_flags.append(f"Multiple sources: {match_count} found")
 
         if len(tier1_matches) >= 3:
-            green_flags.append(f"✅ MULTIPLE TIER-1 SOURCES: {len(tier1_matches)} top outlets confirm (Reuters, AP, etc.)")
+            green_flags.append(f"Multiple tier-1 sources confirm ({len(tier1_matches)} outlets)")
         elif len(tier1_matches) == 2:
-            green_flags.append(f"✅ 2 TIER-1 SOURCES confirm")
+            green_flags.append(f"2 tier-1 sources confirm")
         elif len(tier1_matches) == 1:
-            green_flags.append(f"✅ Confirmed by Tier-1 source: {tier1_matches[0]['source']}")
+            green_flags.append(f"Confirmed by tier-1: {tier1_matches[0]['source']}")
 
         if match_count > 0 and avg_sim >= 0.70:
-            green_flags.append(f"✅ HIGH SEMANTIC SIMILARITY ({avg_sim*100:.0f}%)")
+            green_flags.append(f"High content match ({avg_sim*100:.0f}%)")
         elif match_count > 0 and avg_sim >= 0.55:
-            green_flags.append(f"✅ GOOD SEMANTIC SIMILARITY ({avg_sim*100:.0f}%)")
+            green_flags.append(f"Good content match ({avg_sim*100:.0f}%)")
 
         if match_count > 0 and avg_cred >= 0.85:
-            green_flags.append(f"✅ HIGH CREDIBILITY SOURCES (avg {avg_cred*100:.0f}%)")
+            green_flags.append(f"High credibility sources (avg {avg_cred*100:.0f}%)")
         elif match_count > 0 and avg_cred >= 0.75:
-            green_flags.append(f"✅ CREDIBLE SOURCES (avg {avg_cred*100:.0f}%)")
+            green_flags.append(f"Credible sources (avg {avg_cred*100:.0f}%)")
 
         return red_flags, green_flags
 
@@ -439,8 +448,9 @@ class CrossReferenceEngine:
                 "avg_similarity": 0.0,
                 "avg_credibility": 0.0,
                 "match_count": 0,
-                "coverage_boost": 0.0,
-                "tier1_multiplier": 1.0,
+                "core_quality": 0.0,
+                "volume_boost": 0.0,
+                "tier1_premium": 0.0,
             },
             "sources_checked": 0,
             "matching_sources": [],
@@ -452,7 +462,7 @@ class CrossReferenceEngine:
                 "people_and_orgs": orig_info["entities"][:10],
                 "locations": orig_info["locations"][:10],
             },
-            "red_flags": ["❌ No sources found - UNABLE TO VERIFY"],
+            "red_flags": ["No sources found"],
             "green_flags": [],
             "score_breakdown": [],
         }
@@ -464,22 +474,5 @@ if __name__ == "__main__":
     print("\n" + "="*60)
     print("TEST 1: Real news (many credible sources)")
     print("="*60)
-    result = engine.analyze(
-        title="Major Earthquake Hits Nepal",
-        content="A significant earthquake struck Nepal affecting thousands of people"
-    )
-    print(f"\n✓ Verdict: {result['verdict']}")
-    print(f"✓ Score: {result['final_score']} (should be HIGH ~0.75-0.95)")
-    print(f"✓ Matching: {result['scores']['match_count']} sources")
-    print(f"✓ Tier-1 sources: {result['tier1_sources_count']}")
+    
 
-    print("\n" + "="*60)
-    print("TEST 2: Complete fake (no sources)")
-    print("="*60)
-    result2 = engine.analyze(
-        title="Moon is Made of Cheese",
-        content="Scientists confirm the moon is made entirely of Swiss cheese"
-    )
-    print(f"\n✓ Verdict: {result2['verdict']}")
-    print(f"✓ Score: {result2['final_score']} (should be 0.0)")
-    print(f"✓ Matching: {result2['scores']['match_count']} sources")

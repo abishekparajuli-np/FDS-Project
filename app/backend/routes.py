@@ -1,5 +1,5 @@
 from flask import jsonify, Blueprint, request
-from engine import CrossReferenceEngine, TRUSTED_SOURCES  # corrected import
+from crossreferenceengine import CrossReferenceEngine, TRUSTED_SOURCES  # corrected import
 
 api = Blueprint('api', __name__, url_prefix='/api')
 

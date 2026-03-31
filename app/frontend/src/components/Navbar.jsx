@@ -14,7 +14,7 @@ function Navbar({ currentPage, onNavigate, isHealthy }) {
           className="flex items-center gap-2 cursor-pointer"
           onClick={() => onNavigate('home')}
         >
-          <h1 className="m-0 text-2xl font-extrabold text-white">Niyantran AI</h1>
+          <h1 className="m-0 text-2xl font-extrabold text-white">Nirikshyak AI</h1>
         </div>
 
         <ul className="m-0 hidden list-none gap-2 p-0 md:flex">
