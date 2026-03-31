@@ -36,7 +36,6 @@ RSS_FEEDS = {
     "bbc_world":      "http://feeds.bbci.co.uk/news/world/rss.xml",
 }
 
-# ============ NEW: Configurable verdict thresholds ============
 THRESHOLD_LIKELY_TRUE = 0.80
 THRESHOLD_MOSTLY_TRUE = 0.65
 THRESHOLD_MIXED = 0.45
@@ -44,11 +43,6 @@ THRESHOLD_QUESTIONABLE = 0.25
 
 
 class NewsTextCleaner:
-    """
-    COMPREHENSIVE DATA CLEANING PIPELINE
-    Removes noise BEFORE transformer encoding
-    """
-    
     JUNK_PATTERNS = [
         r'Advertisement\s*\d*', r'Sponsored\s*Content', r'Advertisement\s*',
         r'\(AP\)', r'\(Reuters\)', r'\(AFP\)', r'\(PTI\)', r'\(ANI\)',
@@ -57,39 +51,29 @@ class NewsTextCleaner:
         r'Share\s*this', r'Follow\s*us', r'Subscribe\s*now',
         r'\d{4}-\d{2}-\d{2}', r'\d{2}:\d{2}',
     ]
-    
+
     @staticmethod
     def clean_text(text: str) -> str:
-        """Full cleaning pipeline"""
         if not text:
             return ""
-            
         original_len = len(text)
-        
         text = re.sub(r'<[^>]+>', ' ', text)
         text = re.sub(r'http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\\(\\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+', ' ', text)
-        
         for pattern in NewsTextCleaner.JUNK_PATTERNS:
             text = re.sub(pattern, ' ', text, flags=re.IGNORECASE)
-        
         text = re.sub(r'[^\w\s\.\,\!\?\;\:\-\(\)]', ' ', text)
         text = re.sub(r'\s+', ' ', text).strip()
-        
         text = re.sub(r'\.{3,}', '.', text)
         text = re.sub(r'([a-zA-Z])\1{3,}', r'\1\1', text)
-        
         if len(text.split()) < 3:
             return ""
-            
         cleaned_len = len(text)
         if original_len > 50 and cleaned_len / original_len < 0.3:
             print(f"   Cleaned {original_len}->{cleaned_len} chars ({cleaned_len/original_len:.0%} kept)")
-            
         return text
 
 
 class CrossReferenceEngine:
-
     def __init__(self):
         print("[*] Loading SentenceTransformer + TextCleaner...")
         self.similarity_model = SentenceTransformer("all-MiniLM-L6-v2")
@@ -115,10 +99,8 @@ class CrossReferenceEngine:
         try:
             clean_a = self.cleaner.clean_text(text_a)[:512]
             clean_b = self.cleaner.clean_text(text_b)[:512]
-            
             if not clean_a.strip() or not clean_b.strip():
                 return 0.0
-                
             emb = self.similarity_model.encode([clean_a, clean_b])
             sim = np.dot(emb[0], emb[1]) / (np.linalg.norm(emb[0]) * np.linalg.norm(emb[1]) + 1e-8)
             return float(np.clip(sim, 0.0, 1.0))
@@ -135,7 +117,6 @@ class CrossReferenceEngine:
                 "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
             })
             feed = feedparser.parse(resp.text)
-            
             for entry in feed.entries[:20]:
                 link = entry.get("link", "")
                 domain = urlparse(link).netloc.replace("www.", "")
@@ -143,13 +124,10 @@ class CrossReferenceEngine:
                     "name": domain or "Unknown", "credibility": 0.50,
                     "bias": "unknown", "tier": 3, "lang": "en"
                 })
-                
                 title = self.cleaner.clean_text(entry.get("title", ""))
                 content = self.cleaner.clean_text(entry.get("summary", entry.get("title", "")))
-                
                 if not title and not content:
                     continue
-                    
                 all_articles.append({
                     "title": title,
                     "content": content,
@@ -183,15 +161,12 @@ class CrossReferenceEngine:
                 "name": source_key, "credibility": 0.70,
                 "bias": "center", "tier": 2
             })
-            
             articles = []
             for entry in feed.entries[:10]:
                 title = self.cleaner.clean_text(entry.get("title", ""))
                 content = self.cleaner.clean_text(entry.get("summary", entry.get("title", "")))
-                
                 if not title and not content:
                     continue
-                    
                 articles.append({
                     "title": title,
                     "content": content,
@@ -225,18 +200,14 @@ class CrossReferenceEngine:
         return results
 
     def analyze(self, title: str, content: str) -> dict:
-        """Analyze claim using NEW SCORING SYSTEM"""
         start = time.time()
-        
+
         clean_title = self.cleaner.clean_text(title)
         clean_content = self.cleaner.clean_text(content)
         full_text = f"{clean_title} {clean_content}"
-        
+
         orig_info = self.extract_entities(full_text)
         query = clean_title if clean_title.strip() else " ".join(orig_info["entities"][:5])
-
-        print(f"\n[ANALYZE] Processing: {query[:60]}...")
-        print(f"[CLEAN] Input: {len(title+content)}->{len(full_text)} chars")
 
         with ThreadPoolExecutor(max_workers=2) as ex:
             f_gnews = ex.submit(self.fetch_google_news, query)
@@ -245,101 +216,93 @@ class CrossReferenceEngine:
             rss = f_rss.result()
 
         all_refs = gnews + rss
-        print(f"[FETCH] Fetched: {len(all_refs)} articles")
 
-        # ============ NO SOURCES = 0.0 SCORE ============
         if len(all_refs) == 0:
             return self._no_sources_result(orig_info, time.time() - start)
 
         matching = []
-        tier1_matches = []
-        tier2_matches = []
-        tier3_matches = []
+        tier1_matches, tier2_matches, tier3_matches = [], [], []
 
         for ref in all_refs:
-            ref_text = f"{ref['title']} {ref['content']}"
-            
-            if not ref_text.strip():
+            ref_text = f"{ref['title']} {ref['content']}".strip()
+            if not ref_text:
                 continue
-                
-            # Lower similarity threshold for matching (0.35 instead of 0.40)
+
             sim = self.compute_similarity(full_text[:600], ref_text)
-            
-            if sim >= 0.35:
-                matching.append({
-                    "source": ref["source"],
-                    "domain": ref["domain"],
-                    "title": ref["title"][:120],
-                    "url": ref["url"],
-                    "similarity": round(sim, 3),
-                    "credibility": ref["credibility"],
-                    "bias": ref.get("bias", "unknown"),
-                    "tier": ref.get("tier", 3),
-                    "fetch_type": ref.get("fetch_type", ""),
-                })
-                
-                if ref.get("tier") == 1:
-                    tier1_matches.append(ref)
-                elif ref.get("tier") == 2:
-                    tier2_matches.append(ref)
-                else:
-                    tier3_matches.append(ref)
 
-        matching.sort(key=lambda x: x["credibility"] * x["similarity"], reverse=True)
+            # Stricter similarity and credibility filters
+            if sim < 0.45:
+                continue
+            if ref["credibility"] < 0.60:
+                continue
 
-        print(f"[OK] {len(matching)} matches | T1: {len(tier1_matches)}, T2: {len(tier2_matches)}, T3: {len(tier3_matches)}")
+            match_item = {
+                "source": ref["source"],
+                "domain": ref["domain"],
+                "title": ref["title"][:120],
+                "url": ref["url"],
+                "similarity": round(sim, 3),
+                "credibility": ref["credibility"],
+                "bias": ref.get("bias", "unknown"),
+                "tier": ref.get("tier", 3),
+                "fetch_type": ref.get("fetch_type", ""),
+            }
+            matching.append(match_item)
 
-        # ============ NEW SCORING SYSTEM ============
+            if ref.get("tier") == 1:
+                tier1_matches.append(ref)
+            elif ref.get("tier") == 2:
+                tier2_matches.append(ref)
+            else:
+                tier3_matches.append(ref)
+
         if len(matching) == 0:
             return self._no_sources_result(orig_info, time.time() - start)
 
-        # Calculate base metrics
+        matching.sort(key=lambda x: x["credibility"] * x["similarity"], reverse=True)
+
         avg_similarity = float(np.mean([m["similarity"] for m in matching]))
         avg_credibility = float(np.mean([m["credibility"] for m in matching]))
         match_count = len(matching)
 
-        print(f"[SCORE] Avg Similarity: {avg_similarity:.3f}, Avg Credibility: {avg_credibility:.3f}, Matches: {match_count}")
-
-        # ============ FINAL SCORE CALCULATION ============
-        # Step 1: Base score from average credibility (most important)
-        base_score = avg_credibility * 0.40
-        
-        # Step 2: Boost by similarity
-        similarity_boost = avg_similarity * 0.25
-        
-        # Step 3: Coverage boost (THIS IS THE KEY FIX)
-        # More sources = exponentially higher confidence
+        # Coverage boost: steeper curve
         if match_count >= 15:
-            coverage_boost = 0.30
+            coverage_boost = 0.35
         elif match_count >= 10:
-            coverage_boost = 0.25
+            coverage_boost = 0.28
         elif match_count >= 7:
-            coverage_boost = 0.20
+            coverage_boost = 0.22
         elif match_count >= 5:
-            coverage_boost = 0.15
+            coverage_boost = 0.16
         elif match_count >= 3:
             coverage_boost = 0.10
         elif match_count == 2:
             coverage_boost = 0.05
-        else:  # match_count == 1
+        else:
             coverage_boost = 0.0
-        
-        # Step 4: Tier-1 multiplier (credible sources multiply the score)
-        tier1_multiplier = 1.0
+
+        base_score = avg_credibility * 0.45
+        similarity_boost = avg_similarity * 0.25
+
         if len(tier1_matches) >= 3:
-            tier1_multiplier = 1.30  # 30% boost
+            tier1_multiplier = 1.35
         elif len(tier1_matches) == 2:
-            tier1_multiplier = 1.20  # 20% boost
+            tier1_multiplier = 1.22
         elif len(tier1_matches) == 1:
-            tier1_multiplier = 1.10  # 10% boost
-        
-        # Assemble final score
-        final_score = (base_score + similarity_boost + coverage_boost) * tier1_multiplier
-        final_score = float(np.clip(final_score, 0.0, 1.0))
+            tier1_multiplier = 1.12
+        else:
+            tier1_multiplier = 1.0
 
-        print(f"[BREAKDOWN] Base: {base_score:.3f}, Similarity: {similarity_boost:.3f}, Coverage: {coverage_boost:.3f}, Tier1x: {tier1_multiplier:.2f} = {final_score:.3f}")
+        raw_score = (base_score + similarity_boost + coverage_boost) * tier1_multiplier
+        raw_score = float(np.clip(raw_score, 0.0, 1.0))
 
-        verdict = self._get_verdict(final_score, len(matching))
+        # Safety clamp: weak evidence shouldn’t look solid
+        if match_count < 3 or avg_similarity < 0.50:
+            raw_score = min(raw_score, 0.35)
+
+        final_score = raw_score
+
+        verdict = self._get_verdict(final_score, match_count)
         red_flags, green_flags = self._generate_flags(
             matching, avg_similarity, avg_credibility, tier1_matches, tier2_matches, tier3_matches, match_count
         )
@@ -364,9 +327,9 @@ class CrossReferenceEngine:
             },
             "sources_checked": len(all_refs),
             "matching_sources": matching[:10],
-            "nepal_sources_count": len([m for m in matching if 
-                "nepal" in m.get("domain", "").lower() or 
-                m["source"] in ["The Kathmandu Post", "Nepali Times", "Republica", 
+            "nepal_sources_count": len([m for m in matching if
+                "nepal" in m.get("domain", "").lower() or
+                m["source"] in ["The Kathmandu Post", "Nepali Times", "Republica",
                                "Online Khabar", "Setopati", "eKantipur"]]),
             "tier1_sources_count": len(tier1_matches),
             "tier2_sources_count": len(tier2_matches),
@@ -381,7 +344,7 @@ class CrossReferenceEngine:
                 {
                     "factor": "Base Score (Credibility)",
                     "value": round(base_score, 4),
-                    "weight": "40%"
+                    "weight": "45%"
                 },
                 {
                     "factor": "Similarity Boost",
@@ -408,39 +371,36 @@ class CrossReferenceEngine:
     def _get_verdict(self, score: float, matching_count: int) -> str:
         if matching_count == 0:
             return "UNVERIFIED"
-        elif score >= THRESHOLD_LIKELY_TRUE:
+        if score >= THRESHOLD_LIKELY_TRUE:
             return "LIKELY TRUE"
-        elif score >= THRESHOLD_MOSTLY_TRUE:
+        if score >= THRESHOLD_MOSTLY_TRUE:
             return "MOSTLY TRUE"
-        elif score >= THRESHOLD_MIXED:
+        if score >= THRESHOLD_MIXED:
             return "MIXED"
-        elif score >= THRESHOLD_QUESTIONABLE:
+        if score >= THRESHOLD_QUESTIONABLE:
             return "QUESTIONABLE"
-        else:
-            return "LIKELY FALSE"
+        return "LIKELY FALSE"
 
     def _generate_flags(self, matching, avg_sim, avg_cred, tier1_matches, tier2_matches, tier3_matches, match_count) -> tuple:
         red_flags = []
         green_flags = []
 
-        # RED FLAGS
         if match_count == 0:
             red_flags.append("❌ NO SOURCES FOUND - UNVERIFIED")
         elif match_count == 1:
             red_flags.append("⚠️  Only 1 source corroborates (insufficient verification)")
         elif match_count < 3:
             red_flags.append(f"⚠️  Only {match_count} sources corroborate (weak coverage)")
-        
+
         if match_count > 0 and avg_sim < 0.45:
             red_flags.append(f"⚠️  Low semantic similarity ({avg_sim*100:.0f}%)")
-        
+
         if match_count > 0 and avg_cred < 0.70:
             red_flags.append(f"⚠️  Low source credibility ({avg_cred*100:.0f}%)")
-        
+
         if len(tier3_matches) > 2 and len(tier1_matches) == 0:
             red_flags.append("⚠️  Only low-tier sources (reduced confidence)")
 
-        # GREEN FLAGS
         if match_count >= 15:
             green_flags.append(f"✅ EXCELLENT COVERAGE: {match_count} sources confirm")
         elif match_count >= 10:
@@ -449,19 +409,19 @@ class CrossReferenceEngine:
             green_flags.append(f"✅ GOOD COVERAGE: {match_count} sources confirm")
         elif match_count >= 3:
             green_flags.append(f"✅ Multiple sources ({match_count}) confirm")
-        
+
         if len(tier1_matches) >= 3:
             green_flags.append(f"✅ MULTIPLE TIER-1 SOURCES: {len(tier1_matches)} top outlets confirm (Reuters, AP, etc.)")
         elif len(tier1_matches) == 2:
             green_flags.append(f"✅ 2 TIER-1 SOURCES confirm")
         elif len(tier1_matches) == 1:
             green_flags.append(f"✅ Confirmed by Tier-1 source: {tier1_matches[0]['source']}")
-        
+
         if match_count > 0 and avg_sim >= 0.70:
             green_flags.append(f"✅ HIGH SEMANTIC SIMILARITY ({avg_sim*100:.0f}%)")
         elif match_count > 0 and avg_sim >= 0.55:
             green_flags.append(f"✅ GOOD SEMANTIC SIMILARITY ({avg_sim*100:.0f}%)")
-        
+
         if match_count > 0 and avg_cred >= 0.85:
             green_flags.append(f"✅ HIGH CREDIBILITY SOURCES (avg {avg_cred*100:.0f}%)")
         elif match_count > 0 and avg_cred >= 0.75:
@@ -498,11 +458,9 @@ class CrossReferenceEngine:
         }
 
 
-# ============ EXAMPLE USAGE ============
 if __name__ == "__main__":
     engine = CrossReferenceEngine()
-    
-    # Test case 1: Real news with many sources
+
     print("\n" + "="*60)
     print("TEST 1: Real news (many credible sources)")
     print("="*60)
@@ -514,8 +472,7 @@ if __name__ == "__main__":
     print(f"✓ Score: {result['final_score']} (should be HIGH ~0.75-0.95)")
     print(f"✓ Matching: {result['scores']['match_count']} sources")
     print(f"✓ Tier-1 sources: {result['tier1_sources_count']}")
-    
-    # Test case 2: Completely fake
+
     print("\n" + "="*60)
     print("TEST 2: Complete fake (no sources)")
     print("="*60)
