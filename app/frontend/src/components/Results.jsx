@@ -7,56 +7,48 @@ function Results({ result, onBack }) {
       <section className="section" data-aos="fade-up">
         <div className="section-inner text-center">
           <p className="mb-6 text-[1.125rem] text-white/75">No results available. Please analyze content first.</p>
-        <button 
-          onClick={onBack}
-          className="btn-outline"
-        >
-          Go Back
-        </button>
+          <button onClick={onBack} className="btn-outline">
+            Go Back
+          </button>
         </div>
       </section>
     );
   }
 
   const confidence = Math.max(0, Math.min(100, Math.round((result.final_score || 0) * 100)));
+  const matched = result.matching_sources?.length || 0;
+  const contradicted = result.contradicting_sources?.length || 0;
+  const checked = result.sources_checked ?? (matched + contradicted);
 
   const deriveVerdict = () => {
     const raw = (result.verdict || '').toUpperCase();
+    const noSources = checked === 0 || matched === 0;
+
+    if (noSources) {
+      return { label: 'UNVERIFIED', cardClass: 'bg-gray-500/15 border-gray-400 text-gray-100' };
+    }
     if (raw.includes('FALSE') || confidence < 35) {
-      return {
-        label: 'FAKE',
-        cardClass: 'bg-red-500/15 border-red-400 text-red-100',
-      };
+      return { label: 'FAKE', cardClass: 'bg-red-500/15 border-red-400 text-red-100' };
     }
     if (raw.includes('TRUE') || confidence >= 70) {
-      return {
-        label: 'CREDIBLE',
-        cardClass: 'bg-green-500/15 border-green-400 text-green-100',
-      };
+      return { label: 'CREDIBLE', cardClass: 'bg-green-500/15 border-green-400 text-green-100' };
     }
-    return {
-      label: 'QUESTIONABLE',
-      cardClass: 'bg-amber-500/15 border-amber-400 text-amber-100',
-    };
+    return { label: 'QUESTIONABLE', cardClass: 'bg-amber-500/15 border-amber-400 text-amber-100' };
   };
 
   const buildSummary = () => {
-    const matched = result.matching_sources?.length || 0;
-    const contradicted = result.contradicting_sources?.length || 0;
     const redFlags = result.red_flags?.slice(0, 2).join('; ');
     const greenFlags = result.green_flags?.slice(0, 2).join('; ');
 
+    if (checked === 0 || matched === 0) {
+      return 'We could not find any sources to verify this claim.';
+    }
+
     const parts = [
-      `We compared this claim against ${result.sources_checked || matched + contradicted || 0} tracked sources and found ${matched} supporting references with ${contradicted} contradictory references.`,
+      `We compared this claim against ${checked} tracked sources and found ${matched} supporting references with ${contradicted} contradictory references.`,
     ];
-
-    if (greenFlags) {
-      parts.push(`Positive indicators include: ${greenFlags}.`);
-    }
-    if (redFlags) {
-      parts.push(`Risk indicators include: ${redFlags}.`);
-    }
-
+    if (greenFlags) parts.push(`Positive indicators include: ${greenFlags}.`);
+    if (redFlags) parts.push(`Risk indicators include: ${redFlags}.`);
     return parts.join(' ');
   };
 
@@ -100,20 +92,17 @@ function Results({ result, onBack }) {
         <div className="section-inner">
           <div className="mb-8 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             <h1 className="section-title m-0">Analysis Results</h1>
-        <button 
-          onClick={onBack}
-          className="btn-outline"
-        >
-          Analyze Another
-        </button>
-      </div>
+            <button onClick={onBack} className="btn-outline">
+              Analyze Another
+            </button>
+          </div>
 
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1.1fr_0.9fr]">
             <article className={`rounded-3xl border p-8 ${verdict.cardClass}`}>
               <h2 className="mb-3 text-[1.5rem] font-bold tracking-wide">Verdict</h2>
               <div className="mb-5 text-[clamp(2rem,6vw,2.8rem)] font-extrabold leading-none">{verdict.label}</div>
               <p className="m-0 text-[1.125rem] text-white/90">
-                Processed in {result.processing_time_s || 0}s with {result.sources_checked || 0} sources checked.
+                Processed in {result.processing_time_s || 0}s with {checked || 0} sources checked.
               </p>
             </article>
 
@@ -149,7 +138,10 @@ function Results({ result, onBack }) {
           <div className="orange-underline" />
           <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
             {sourceCards.map((source, index) => (
-              <article key={`${source.source || source.title || 'source'}-${index}`} className="rounded-2xl border-l-[6px] border-[#ff5722] bg-white p-6 shadow-[0_10px_28px_rgba(0,0,0,0.09)]">
+              <article
+                key={`${source.source || source.title || 'source'}-${index}`}
+                className="rounded-2xl border-l-[6px] border-[#ff5722] bg-white p-6 shadow-[0_10px_28px_rgba(0,0,0,0.09)]"
+              >
                 <div className="flex items-start gap-4">
                   <img src={getFavicon(source.url)} alt="source logo" className="h-12 w-12 rounded-full border border-slate-200" />
                   <div className="flex-1">
